@@ -1,0 +1,8 @@
+{
+    "name": "unity",
+    "title": "Scriptorium for Unity",
+    "version": "1.0.0",
+    "api": 1,
+    "description": "One Unity editor for each worker copy, with MCP for Unity pinned to it.",
+    "requires": ["uvx"]
+}
