@@ -69,8 +69,13 @@ function Test-UnityReady([string] $assets) {
 }
 
 # An open editor holds Temp/UnityLockfile alone; Unity's own "another instance" check reads the same lock. The process
-# list missed an open editor now and then, and each miss opened a second one.
+# list missed an open editor now and then, and each miss opened a second one. An editor that still starts, or that
+# waits in a dialog before it opens the project, holds no lock yet: the process this plugin started counts too.
 function Test-ProjectOpen([string] $project) {
+    $started = "-projectPath `"$project`""
+    if (Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($started) }) {
+        return $true
+    }
     $lock = "$project/Temp/UnityLockfile"
     if (-not (Test-Path $lock)) {
         return $false
@@ -94,6 +99,14 @@ function Start-UnityIfClosed([string] $project, $ctx) {
     $editor = Join-Path (Get-Editors $ctx.Settings) "$version\Editor\Unity.exe"
     if (-not (Test-Path $editor)) {
         throw "Unity $version is not in $(Get-Editors $ctx.Settings): install it with Unity Hub, or set the plugin's editors setting"
+    }
+    # What an editor that was ended by force leaves behind. A scene backup makes the next editor ask in a dialog before it
+    # opens the project, and nobody is there to click. The status file still says "ready", so the wait below would end.
+    Remove-Item "$project/Temp/__Backupscenes" -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($file in Get-ChildItem "$HOME\.unity-mcp\unity-mcp-status-*.json" -ErrorAction SilentlyContinue) {
+        if ((Get-Content $file.FullName -Raw | ConvertFrom-Json).project_path -eq "$project/Assets") {
+            Remove-Item $file.FullName -Force
+        }
     }
     & $ctx.Log "starting Unity $version on $project"
     Start-Process $editor -ArgumentList "-projectPath `"$project`""

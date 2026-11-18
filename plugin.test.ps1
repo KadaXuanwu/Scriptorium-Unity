@@ -68,6 +68,17 @@ try {
     Assert-Equal (Test-Path "$repo\Client\Temp\ScriptoriumRunEnded") $true 'the run-end marker'
     & $hooks.EndRun (New-Context $repo $plain)
 
+    # An editor is open while it holds the project's lock; with no lock held and no process, it is closed.
+    $client = "$repo\Client".Replace('\', '/')
+    Assert-Equal (& $module { param($project) Test-ProjectOpen $project } $client) $false 'no editor on the project'
+    Set-Content "$repo\Client\Temp\UnityLockfile" '' -Encoding utf8
+    $held = [System.IO.File]::Open("$repo\Client\Temp\UnityLockfile", 'Open', 'ReadWrite', 'None')
+    try {
+        Assert-Equal (& $module { param($project) Test-ProjectOpen $project } $client) $true 'an editor holds the lock'
+    } finally {
+        $held.Dispose()
+    }
+
     # A project at the repo root.
     New-Item -ItemType Directory -Force "$plain\ProjectSettings" | Out-Null
     Copy-Item "$repo\Client\ProjectSettings\ProjectVersion.txt" "$plain\ProjectSettings\"
