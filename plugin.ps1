@@ -174,10 +174,13 @@ function Add-YamlAttributes([string] $checkout) {
 }
 
 @{
-    # Checks the editor of the project's Unity version, adds the editor script and the YAML merge lines, and sets Smart
+    # Checks uvx and the editor of the project's Unity version, adds the editor script and the YAML merge lines, and sets Smart
     # Merge in the main checkout. Returns the files it added.
     Setup = {
         param($ctx)
+        if (-not (Get-Command uvx -ErrorAction SilentlyContinue)) {
+            throw 'uvx is not on the PATH: install uv (https://docs.astral.sh/uv/)'
+        }
         $project = Get-UnityProject $ctx.Project
         if (-not $project) {
             & $ctx.Log 'no Unity project in the repo root or one folder down: nothing to set up'

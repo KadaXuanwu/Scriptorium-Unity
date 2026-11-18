@@ -37,7 +37,7 @@ Each key of the entry is a setting. A PC can set its own in `.queue/settings.jso
 
 | Hook | What it does |
 | ---- | ------------ |
-| `Setup` | Checks that the project's Unity version is in `editors`. Copies `Assets/Scriptorium/Editor/RunEnd.cs` and its `.meta` files into the project. Adds the Smart Merge lines for Unity's YAML files to `.gitattributes` when it has none. Sets Smart Merge as a merge driver in the main checkout. Returns the files it added |
+| `Setup` | Checks that `uvx` is on the PATH and that the project's Unity version is in `editors`. Copies `Assets/Scriptorium/Editor/RunEnd.cs` and its `.meta` files into the project. Adds the Smart Merge lines for Unity's YAML files to `.gitattributes` when it has none. Sets Smart Merge as a merge driver in the main checkout. Returns the files it added |
 | `PrepareCopy` | Copies the Asset Store packages that `AssetStore.json` at the project root lists from the main checkout, when that file is there. Sets Smart Merge in the copy |
 | `Start` | Opens the copy's editor when it is closed, and waits until MCP for Unity says it is ready: up to 90 minutes for a first import |
 | `GetRun` | Gives the run the `UnityMCP` server, pinned to the copy's `Assets`, the tool rule `mcp__UnityMCP`, and the name of its editor |
