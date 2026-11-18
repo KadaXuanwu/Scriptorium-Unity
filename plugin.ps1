@@ -1,6 +1,7 @@
 # Scriptorium for Unity (README.md): the hooks of the Scriptorium plugin contract, version 1. Loading this file only
-# defines functions; the base calls the hooks in the hashtable at its end. Settings: `editors` (the folder that holds
-# one folder per Unity version, Unity Hub's default) and `mcpVersion` (a fixed version of the MCP for Unity server).
+# defines functions; the base calls the hooks in the hashtable at its end. A run drives its copy's editor with the Unity
+# CLI (`unity`), which reaches the editor through the project's com.unity.pipeline package. Setting: `editors` (the
+# folder that holds one folder per Unity version, Unity Hub's default).
 $ErrorActionPreference = 'Stop'
 
 $DefaultEditors = 'C:\Program Files\Unity\Hub\Editor'
@@ -15,29 +16,10 @@ function Get-Editors($settings) {
     return $DefaultEditors
 }
 
-# The uvx arguments that pick the MCP for Unity server. The server must be the release of the Unity package in the
-# project, so no file holds a version number: the version of the installed package (embedded in Packages, else Unity's
-# cache in Library), or the latest release for a project that Unity has not resolved yet. The `mcpVersion` setting fixes
-# one instead.
-function Get-McpSource([string] $project, $settings) {
-    $version = if ($settings -and $settings.mcpVersion) { [string]$settings.mcpVersion } else { $null }
-    if (-not $version) {
-        $package = 'com.coplaydev.unity-mcp'
-        $files = @(Get-Item "$project/Packages/$package/package.json" -ErrorAction SilentlyContinue) +
-            @(Get-ChildItem "$project/Library/PackageCache/$package@*/package.json" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
-        if ($files) {
-            $version = [string](Get-Content $files[0].FullName -Raw | ConvertFrom-Json).version
-        }
-    }
-    if (-not $version) {
-        return @('--from', 'mcpforunityserver')
-    }
-    # A pre-release package (the beta branch) asks for the newest pre-release server.
-    if ($version.Contains('-')) {
-        return @('--prerelease', 'explicit', '--from', 'mcpforunityserver>=0.0.0a0')
-    }
-    return @('--from', "mcpforunityserver==$version")
-}
+# What a run may call without a question: the commands that drive or start its own editor, never the ones that install
+# or remove an editor, sign in or change the PC.
+$RunTools = @('Bash(unity command:*)', 'Bash(unity recompile:*)', 'Bash(unity status:*)', 'Bash(unity job:*)',
+    'Bash(unity test:*)', 'Bash(unity run:*)', 'Bash(unity open:*)', 'Bash(unity close:*)', 'Bash(unity skill show:*)')
 
 # A checkout's Unity project: the checkout itself or a folder one level down; $null for a repo without one.
 function Get-UnityProject([string] $dir) {
@@ -60,35 +42,31 @@ function Get-RelativeProject([string] $checkout, [string] $project) {
 }
 
 function Get-UnityVersion([string] $project) {
-    return ((Get-Content (Join-Path $project 'ProjectSettings\ProjectVersion.txt'))[0] -split ' ')[1]
+    return (@(Get-Content (Join-Path $project 'ProjectSettings\ProjectVersion.txt'))[0] -split ' ')[1]
 }
 
-# A project's editor as MCP for Unity names it (Unity@<hash>), from its status file.
-function Get-UnityInstance([string] $assets) {
-    foreach ($file in Get-ChildItem "$HOME\.unity-mcp\unity-mcp-status-*.json" -ErrorAction SilentlyContinue) {
-        $status = Get-Content $file.FullName -Raw | ConvertFrom-Json
-        if ($status.project_path -eq $assets) {
-            return "Unity@$($file.BaseName.Substring('unity-mcp-status-'.Length))"
-        }
-    }
-    return $null
+# Whether the project holds the package through which the Unity CLI reaches a running editor (Unity 6.0 and later).
+# Without it no command reaches an editor, so this plugin opens none: a run then uses `unity test` and `unity run`,
+# which start an editor of their own in batch mode.
+function Test-Pipeline([string] $project) {
+    $manifest = "$project/Packages/manifest.json"
+    return (Test-Path $manifest) -and (Select-String -Path $manifest -Pattern '"com.unity.pipeline"' -SimpleMatch -Quiet)
 }
 
-function Test-UnityReady([string] $assets) {
-    foreach ($file in Get-ChildItem "$HOME\.unity-mcp\unity-mcp-status-*.json" -ErrorAction SilentlyContinue) {
-        $status = Get-Content $file.FullName -Raw | ConvertFrom-Json
-        if ($status.project_path -eq $assets -and $status.reason -eq 'ready') {
-            return $true
-        }
+# The project's editor as the Unity CLI sees it (`state`, and `blockedBy` while a dialog stops it); $null when the CLI
+# sees none.
+function Get-EditorStatus([string] $project) {
+    $text = (& unity status --project-path $project.Replace('/', '\') --format json --non-interactive 2>$null | Out-String)
+    try {
+        return @(($text | ConvertFrom-Json).data.instances)[0]
+    } catch {
+        return $null
     }
-    return $false
 }
 
 # An open editor holds Temp/UnityLockfile alone; Unity's own "another instance" check reads the same lock. The process
 # list missed an open editor now and then, and each miss opened a second one. An editor that still starts, or that
 # waits in a dialog before it opens the project, holds no lock yet: the process this plugin started counts too.
-# shortcut: an editor that waits in a dialog counts as open, so a later run can start on an editor that never answers;
-# when one shows, wait for MCP for Unity's "ready" for such an editor too.
 function Test-ProjectOpen([string] $project) {
     $started = "-projectPath `"$project`""
     if (Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($started) }) {
@@ -106,8 +84,7 @@ function Test-ProjectOpen([string] $project) {
     }
 }
 
-# Opens the project's editor when none is open, and waits until MCP for Unity says it is ready: a first open imports
-# everything, so up to 90 minutes, then the run tries anyway. Reports every 30 seconds.
+# Opens the project's editor when none is open.
 # shortcut: an editor of another repo's job stays open beside the copy's own; close it by hand if memory gets tight.
 function Start-UnityIfClosed([string] $project, $ctx) {
     if (Test-ProjectOpen $project) {
@@ -118,20 +95,30 @@ function Start-UnityIfClosed([string] $project, $ctx) {
     if (-not (Test-Path $editor)) {
         throw "Unity $version is not in $(Get-Editors $ctx.Settings): install it with Unity Hub, or set the plugin's editors setting"
     }
-    # What an editor that was ended by force leaves behind. A scene backup makes the next editor ask in a dialog before it
-    # opens the project, and nobody is there to click. The status file still says "ready", so the wait below would end.
+    # An editor that was ended by force leaves a scene backup. It makes the next editor ask in a dialog before it opens
+    # the project, and nobody is there to click.
     Remove-Item "$project/Temp/__Backupscenes" -Recurse -Force -ErrorAction SilentlyContinue
-    foreach ($file in Get-ChildItem "$HOME\.unity-mcp\unity-mcp-status-*.json" -ErrorAction SilentlyContinue) {
-        if ((Get-Content $file.FullName -Raw | ConvertFrom-Json).project_path -eq "$project/Assets") {
-            Remove-Item $file.FullName -Force
-        }
-    }
     & $ctx.Log "starting Unity $version on $project"
     Start-Process $editor -ArgumentList "-projectPath `"$project`""
-    for ($i = 0; $i -lt 180 -and -not (Test-UnityReady "$project/Assets"); $i++) {
+}
+
+# Waits until the Unity CLI says the project's editor is ready for commands: a first open imports everything, so up to
+# 90 minutes. Reports every 30 seconds. A dialog never closes with nobody there, so it throws with the dialog's title:
+# the worker shows that on its card and looks again later.
+function Wait-UnityReady([string] $project, $ctx) {
+    for ($i = 0; $i -lt 180; $i++) {
+        $status = Get-EditorStatus $project
+        if ($status -and $status.state -eq 'ready') {
+            return
+        }
+        $dialogs = @($status.blockedBy.dialogs | ForEach-Object { $_.title } | Where-Object { $_ })
+        if ($dialogs) {
+            throw "its Unity editor waits in a dialog that a person must answer: $($dialogs -join ', ')"
+        }
         & $ctx.Report 'Opening its Unity editor'
         Start-Sleep 30
     }
+    throw 'its Unity editor was not ready for commands after 90 minutes'
 }
 
 # Unity's Smart Merge as the checkout's merge driver for the YAML files .gitattributes routes to it. Per checkout.
@@ -204,13 +191,31 @@ function Add-YamlAttributes([string] $checkout) {
     return @('.gitattributes')
 }
 
+# The package through which the Unity CLI reaches a running editor, added to the project's manifest when it is not
+# there. Unity 6.0 and later only. Returns the manifest when it changed, as a path from the repo root.
+function Add-Pipeline([string] $checkout, [string] $project, $ctx) {
+    if (Test-Pipeline $project) {
+        return @()
+    }
+    if ([int]((Get-UnityVersion $project) -split '\.')[0] -lt 6000) {
+        & $ctx.Log 'the Unity CLI reaches a running editor from Unity 6.0 on: runs here get unity test and unity run only'
+        return @()
+    }
+    & unity pipeline install --project-path $project.Replace('/', '\') --non-interactive | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Pipeline $project)) {
+        throw "unity pipeline install did not add com.unity.pipeline to $project"
+    }
+    $relative = Get-RelativeProject $checkout $project
+    return @("$(if ($relative) { "$relative/" })Packages/manifest.json")
+}
+
 @{
-    # Checks uvx and the editor of the project's Unity version, adds the editor script and the YAML merge lines, and sets Smart
-    # Merge in the main checkout. Returns the files it added.
+    # Checks the editor of the project's Unity version, adds the editor script, the YAML merge lines and the Pipeline
+    # package, and sets Smart Merge in the main checkout. Returns the files it added or changed.
     Setup = {
         param($ctx)
-        if (-not (Get-Command uvx -ErrorAction SilentlyContinue)) {
-            throw 'uvx is not on the PATH: install uv (https://docs.astral.sh/uv/)'
+        if (-not (Get-Command unity -ErrorAction SilentlyContinue)) {
+            throw 'the Unity CLI (unity) is not on the PATH: README.md says where to get it'
         }
         $project = Get-UnityProject $ctx.Project
         if (-not $project) {
@@ -222,7 +227,7 @@ function Add-YamlAttributes([string] $checkout) {
             throw "Unity $version is not in $(Get-Editors $ctx.Settings): install it with Unity Hub, or set the plugin's editors setting"
         }
         Set-YamlMerge $ctx.Project $version $ctx.Settings
-        return @(Add-EditorScript $ctx.Project $project) + @(Add-YamlAttributes $ctx.Project)
+        return @(Add-EditorScript $ctx.Project $project) + @(Add-YamlAttributes $ctx.Project) + @(Add-Pipeline $ctx.Project $project $ctx)
     }
     # Copies the Asset Store packages the copy lacks and sets Smart Merge in it.
     PrepareCopy = {
@@ -236,34 +241,35 @@ function Add-YamlAttributes([string] $checkout) {
         Copy-AssetStorePackages $project $copyProject $ctx.Copy $relative
         Set-YamlMerge $ctx.Copy (Get-UnityVersion $project) $ctx.Settings
     }
-    # Opens the checkout's editor when it is closed and waits until it is ready.
+    # Opens the checkout's editor when it is closed and waits until it is ready for commands. Not for a project without
+    # the Pipeline package: no command reaches its editor, and an open editor stops the batch mode runs.
     Start = {
         param($ctx)
         $project = Get-UnityProject $ctx.Copy
-        if ($project) {
+        if ($project -and (Test-Pipeline $project)) {
             Start-UnityIfClosed $project $ctx
+            Wait-UnityReady $project $ctx
         }
     }
-    # MCP for Unity pinned to the checkout's editor. The server pins by UNITY_MCP_DEFAULT_INSTANCE, but a session that
-    # starts while only another editor answers selects that one for good: the prompt names this one first.
+    # The Unity CLI, aimed at the checkout's own editor. With several editors open, a command with no project takes the
+    # only editor that answers, also another copy's: UNITY_PROJECT_PATH in the run's environment names this one.
     GetRun = {
         param($ctx)
         $project = Get-UnityProject $ctx.Copy
         if (-not $project) {
             return @{}
         }
-        $assets = "$project/Assets"
-        $uvx = (Get-Command uvx).Source.Replace('\', '/')
+        $path = $project.Replace('/', '\')
         $run = @{
-            McpServers = @{ UnityMCP = @{ type = 'stdio'; command = $uvx
-                args = @(Get-McpSource $project $ctx.Settings) + @('mcp-for-unity')
-                env = @{ UNITY_MCP_DEFAULT_INSTANCE = $assets } } }
-            AllowedTools = @('mcp__UnityMCP')
+            AllowedTools = $RunTools
+            Env = @{ UNITY_PROJECT_PATH = $path; UNITY_NO_BANNER = '1'; UNITY_NO_PAGER = '1'; UNITY_NON_INTERACTIVE = '1' }
         }
-        $instance = Get-UnityInstance $assets
-        if ($instance) {
-            $run.Prompt = "Your Unity editor is $instance (project $assets): make set_active_instance('$instance') your " +
-                'first Unity MCP call, again after any MCP reconnect.'
+        $run.Prompt = if (Test-Pipeline $project) {
+            "Your Unity editor is the one that has $path open. UNITY_PROJECT_PATH names it for every unity command: " +
+                'never pass another project to one.'
+        } else {
+            "The Unity project $path has no com.unity.pipeline package, so no unity command reaches an editor: use " +
+                'unity test and unity run, which start an editor in batch mode.'
         }
         return $run
     }
