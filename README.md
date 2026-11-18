@@ -31,7 +31,7 @@ Each key of the entry is a setting. A PC can set its own in `.queue/settings.jso
 | Setting | Default | What |
 | ------- | ------- | ---- |
 | `editors` | `C:\Program Files\Unity\Hub\Editor` | The folder that holds one folder for each Unity version |
-| `mcpVersion` | `10.3.0` | The version of the MCP for Unity server (`mcpforunityserver` on PyPI) that runs use |
+| `mcpVersion` | none | A fixed version of the MCP for Unity server (`mcpforunityserver` on PyPI) for the runs. Without it, the server is the version of the MCP for Unity package that the project has installed, so the two always match and no file holds a version number. A project that Unity has not resolved yet gets the latest release |
 
 ## What each hook does
 
@@ -40,7 +40,7 @@ Each key of the entry is a setting. A PC can set its own in `.queue/settings.jso
 | `Setup` | Checks that `uvx` is on the PATH and that the project's Unity version is in `editors`. Copies `Assets/Scriptorium/Editor/RunEnd.cs` and its `.meta` files into the project. Adds the Smart Merge lines for Unity's YAML files to `.gitattributes` when it has none. Sets Smart Merge as a merge driver in the main checkout. Returns the files it added |
 | `PrepareCopy` | Copies the Asset Store packages that `AssetStore.json` at the project root lists from the main checkout, when that file is there. Sets Smart Merge in the copy |
 | `Start` | Opens the copy's editor when it is closed, and waits until MCP for Unity says it is ready: up to 90 minutes for a first import. Before it opens one, it deletes the copy's scene backup (`Temp/__Backupscenes`) and MCP for Unity's old status file. An editor that was ended by force leaves both, and the backup makes the next editor wait in a dialog. An editor that still starts counts as open, so the hook never opens a second one |
-| `GetRun` | Gives the run the `UnityMCP` server, pinned to the copy's `Assets`, the tool rule `mcp__UnityMCP`, and the name of its editor |
+| `GetRun` | Gives the run the `UnityMCP` server at the version of the copy's MCP for Unity package (`mcpVersion`, Settings), pinned to the copy's `Assets`, the tool rule `mcp__UnityMCP`, and the name of its editor |
 | `EndRun` | Writes `Temp/ScriptoriumRunEnded`. The editor script reads it and leaves play mode |
 
 A repo with no Unity project gets nothing from any hook.

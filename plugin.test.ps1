@@ -56,7 +56,15 @@ try {
     $run = & $hooks.GetRun (New-Context $repo $repo @{ mcpVersion = '9.9.9' })
     Assert-Equal $run.McpServers.UnityMCP.env.UNITY_MCP_DEFAULT_INSTANCE "$($repo.Replace('\', '/'))/Client/Assets" 'the pinned project'
     Assert-Equal ($run.McpServers.UnityMCP.args -join ' ') '--from mcpforunityserver==9.9.9 mcp-for-unity' 'the server version'
-    Assert-Equal ((& $hooks.GetRun (New-Context $repo $repo)).McpServers.UnityMCP.args[1]) 'mcpforunityserver==10.3.0' 'the default version'
+    # With no setting: the latest release for a project Unity has not resolved, then the installed package's version.
+    Assert-Equal ((& $hooks.GetRun (New-Context $repo $repo)).McpServers.UnityMCP.args -join ' ') '--from mcpforunityserver mcp-for-unity' 'no package yet'
+    $cache = "$repo\Client\Library\PackageCache\com.coplaydev.unity-mcp@abc123"
+    New-Item -ItemType Directory -Force $cache | Out-Null
+    Set-Content "$cache\package.json" '{ "name": "com.coplaydev.unity-mcp", "version": "11.2.0" }' -Encoding utf8
+    Assert-Equal ((& $hooks.GetRun (New-Context $repo $repo)).McpServers.UnityMCP.args -join ' ') '--from mcpforunityserver==11.2.0 mcp-for-unity' 'the installed package''s version'
+    Set-Content "$cache\package.json" '{ "name": "com.coplaydev.unity-mcp", "version": "11.3.0-beta.1" }' -Encoding utf8
+    Assert-Equal ((& $hooks.GetRun (New-Context $repo $repo)).McpServers.UnityMCP.args -join ' ') '--prerelease explicit --from mcpforunityserver>=0.0.0a0 mcp-for-unity' 'a pre-release package'
+    Assert-Equal ((& $hooks.GetRun (New-Context $repo $repo @{ mcpVersion = '9.9.9' })).McpServers.UnityMCP.args[1]) 'mcpforunityserver==9.9.9' 'the setting wins over the package'
     Assert-Equal "$($run.AllowedTools)" 'mcp__UnityMCP' 'the tools'
     $plain = Join-Path $root 'Tools'
     New-Item -ItemType Directory -Force $plain | Out-Null

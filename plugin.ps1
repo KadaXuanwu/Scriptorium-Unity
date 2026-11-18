@@ -1,14 +1,13 @@
 # Scriptorium for Unity (README.md): the hooks of the Scriptorium plugin contract, version 1. Loading this file only
 # defines functions; the base calls the hooks in the hashtable at its end. Settings: `editors` (the folder that holds
-# one folder per Unity version, Unity Hub's default) and `mcpVersion` (the MCP for Unity server's version).
+# one folder per Unity version, Unity Hub's default) and `mcpVersion` (a fixed version of the MCP for Unity server).
 $ErrorActionPreference = 'Stop'
 
 $DefaultEditors = 'C:\Program Files\Unity\Hub\Editor'
-$DefaultMcpVersion = '10.3.0'
 # This plugin's folder: unity/Assets holds the editor script.
 $PluginRoot = $PSScriptRoot
 
-# The editors folder and the MCP server's version from the plugin's settings, else the defaults.
+# The editors folder from the plugin's settings, else the default.
 function Get-Editors($settings) {
     if ($settings -and $settings.editors) {
         return [string]$settings.editors
@@ -16,11 +15,28 @@ function Get-Editors($settings) {
     return $DefaultEditors
 }
 
-function Get-McpVersion($settings) {
-    if ($settings -and $settings.mcpVersion) {
-        return [string]$settings.mcpVersion
+# The uvx arguments that pick the MCP for Unity server. The server must be the release of the Unity package in the
+# project, so no file holds a version number: the version of the installed package (embedded in Packages, else Unity's
+# cache in Library), or the latest release for a project that Unity has not resolved yet. The `mcpVersion` setting fixes
+# one instead.
+function Get-McpSource([string] $project, $settings) {
+    $version = if ($settings -and $settings.mcpVersion) { [string]$settings.mcpVersion } else { $null }
+    if (-not $version) {
+        $package = 'com.coplaydev.unity-mcp'
+        $files = @(Get-Item "$project/Packages/$package/package.json" -ErrorAction SilentlyContinue) +
+            @(Get-ChildItem "$project/Library/PackageCache/$package@*/package.json" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)
+        if ($files) {
+            $version = [string](Get-Content $files[0].FullName -Raw | ConvertFrom-Json).version
+        }
     }
-    return $DefaultMcpVersion
+    if (-not $version) {
+        return @('--from', 'mcpforunityserver')
+    }
+    # A pre-release package (the beta branch) asks for the newest pre-release server.
+    if ($version.Contains('-')) {
+        return @('--prerelease', 'explicit', '--from', 'mcpforunityserver>=0.0.0a0')
+    }
+    return @('--from', "mcpforunityserver==$version")
 }
 
 # A checkout's Unity project: the checkout itself or a folder one level down; $null for a repo without one.
@@ -240,7 +256,7 @@ function Add-YamlAttributes([string] $checkout) {
         $uvx = (Get-Command uvx).Source.Replace('\', '/')
         $run = @{
             McpServers = @{ UnityMCP = @{ type = 'stdio'; command = $uvx
-                args = @('--from', "mcpforunityserver==$(Get-McpVersion $ctx.Settings)", 'mcp-for-unity')
+                args = @(Get-McpSource $project $ctx.Settings) + @('mcp-for-unity')
                 env = @{ UNITY_MCP_DEFAULT_INSTANCE = $assets } } }
             AllowedTools = @('mcp__UnityMCP')
         }
