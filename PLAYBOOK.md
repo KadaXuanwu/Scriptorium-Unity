@@ -94,9 +94,10 @@ A test tweak can leak into `ProjectSettings` (`Time.timeScale`): put it back, an
   For longer code, raise the wait before the `--`: `unity command script eval --timeout 120 -- --file Temp/<name>.cs`.
   After a timeout, run `unity status --until-ready` before you send anything else, and never send the same code again
   without a check of what it did.
-- **A dialog blocks the editor, and no command answers it.** `unity status` then shows `blockedBy` with the dialog's
-  title, and each command waits until its timeout. Do not open one: no `EditorUtility.DisplayDialog`, no unsigned
-  `.unitypackage`, no git change to the open scene. If one is open, do the work that needs no editor, and say in the PR
+- **A dialog blocks the editor.** `unity status` then shows `blockedBy` with the dialog's title, and each command
+  waits until its timeout. Do not open one: no `EditorUtility.DisplayDialog`, no unsigned `.unitypackage`, no git
+  change to the open scene. With CLI 1.0.0 and package 1.0.0 no command answers a dialog. Look for one in your
+  editor's list (`unity command --query dialog`); if it has none, do the work that needs no editor, and say in the PR
   which dialog a person must answer.
 - **After play mode starts or code compiles**, the editor does not answer for a few seconds.
   `unity status --until-ready` waits for it.
