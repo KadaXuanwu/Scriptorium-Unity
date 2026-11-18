@@ -71,6 +71,8 @@ function Test-UnityReady([string] $assets) {
 # An open editor holds Temp/UnityLockfile alone; Unity's own "another instance" check reads the same lock. The process
 # list missed an open editor now and then, and each miss opened a second one. An editor that still starts, or that
 # waits in a dialog before it opens the project, holds no lock yet: the process this plugin started counts too.
+# shortcut: an editor that waits in a dialog counts as open, so a later run can start on an editor that never answers;
+# when one shows, wait for MCP for Unity's "ready" for such an editor too.
 function Test-ProjectOpen([string] $project) {
     $started = "-projectPath `"$project`""
     if (Get-CimInstance Win32_Process -Filter "Name='Unity.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($started) }) {
