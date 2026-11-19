@@ -42,9 +42,10 @@ Each key of the entry is a setting. A PC can set its own in `.queue/settings.jso
 | ---- | ------------ |
 | `Setup` | Checks that `unity` is on the PATH and that the project's Unity version is in `editors`. Copies `Assets/Scriptorium/Editor/RunEnd.cs` and its `.meta` files into the project. Adds the Smart Merge lines for Unity's YAML files to `.gitattributes` when it has none. Adds `com.unity.pipeline` to the project's `Packages/manifest.json` with `unity pipeline install`, on Unity 6.0 or later. Sets Smart Merge as a merge driver in the main checkout. Returns the files it added or changed |
 | `PrepareCopy` | Copies the Asset Store packages that `AssetStore.json` at the project root lists from the main checkout, when that file is there. Sets Smart Merge in the copy |
-| `Start` | Opens the copy's editor when it is closed, and waits until `unity status` says it is ready for commands: up to 90 minutes for a first import. Before it opens one, it deletes the copy's scene backup (`Temp/__Backupscenes`), which an editor that was ended by force leaves and which makes the next editor wait in a dialog. An editor that still starts counts as open, so the hook never opens a second one. An editor that waits in a dialog stops the hook with the dialog's title, and the worker's card shows it. Nothing for a project without `com.unity.pipeline` |
+| `Start` | Opens the copy's editor when it is closed, and waits until `unity status` says it is ready for commands: up to 90 minutes for a first import. An editor that closes during the wait opens again. Before it opens one, it deletes the copy's scene backup (`Temp/__Backupscenes`), which an editor that was ended by force leaves and which makes the next editor wait in a dialog. An editor that still starts counts as open, so the hook never opens a second one. An editor that waits in a dialog stops the hook with the dialog's title, and the worker's card shows it. Nothing for a project without `com.unity.pipeline` |
 | `GetRun` | Gives the run the tool rules for the `unity` commands that drive its editor, `UNITY_PROJECT_PATH` in its environment set to the copy's project, and a sentence that names its editor. No rule lets a run install or remove an editor, sign in, or change the PC |
 | `EndRun` | Writes `Temp/ScriptoriumRunEnded`. The editor script reads it and leaves play mode |
+| `Close` | Closes the checkout's editor with `unity close --force`, without saving. Nothing when no editor is open or the project has no `com.unity.pipeline` |
 
 A repo with no Unity project gets nothing from any hook.
 
@@ -61,8 +62,7 @@ A copy that already has the `Probe` file gets nothing.
 
 ## Limits
 
-- An editor that a run of another repo opened stays open beside the copy's own. Close it by hand if memory gets tight.
-- A disabled worker's editors stay open.
+- An editor that a run of another repo opened stays open beside the copy's own until the worker is disabled.
 - After the project moves to another Unity version, close each worker's editor and bring its copy to the new main before
   the worker goes on: an open editor of the old version does not change by itself.
 

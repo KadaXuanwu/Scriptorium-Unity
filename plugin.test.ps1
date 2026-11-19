@@ -35,10 +35,12 @@ try {
 @echo off
 if "%1"=="pipeline" echo { "dependencies": { "com.unity.pipeline": "1.0.0" } } > "%FAKE_MANIFEST%"
 if "%1"=="status" type "%FAKE_STATUS%"
+if "%1"=="close" echo %2> "%FAKE_CLOSED%"
 '@ -Encoding ascii
     $env:PATH = "$root\bin;$env:PATH"
     $env:FAKE_MANIFEST = "$repo\Client\Packages\manifest.json"
     $env:FAKE_STATUS = "$root\status.json"
+    $env:FAKE_CLOSED = "$root\closed.txt"
     & git init -q $repo
     $settings = @{ editors = $editors }
     $client = "$repo\Client".Replace('\', '/')
@@ -83,6 +85,12 @@ if "%1"=="status" type "%FAKE_STATUS%"
     $threw = ''
     try { & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo) } catch { $threw = "$_" }
     Assert-Equal $threw 'its Unity editor waits in a dialog that a person must answer: Scene Backup Detected' 'an editor in a dialog'
+    # No editor during the wait (it closed, or never opened): the wait opens it. Here the default editors folder has no
+    # Unity 6000.7.1f1, so the open throws.
+    Set-Content $env:FAKE_STATUS '{ "data": { "instances": [] } }' -Encoding ascii
+    $threw = ''
+    try { & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo @{ editors = "$root\none" }) } catch { $threw = "$_" }
+    Assert-Equal ($threw -like 'Unity 6000.7.1f1 is not in *') $true 'the wait opens a closed editor'
 
     # A project older than Unity 6.0: no Pipeline package, so no editor opens, and the run gets the batch mode commands.
     $old = Join-Path $root 'Old'
@@ -107,9 +115,16 @@ if "%1"=="status" type "%FAKE_STATUS%"
     $held = [System.IO.File]::Open("$repo\Client\Temp\UnityLockfile", 'Open', 'ReadWrite', 'None')
     try {
         Assert-Equal (& $module { param($project) Test-ProjectOpen $project } $client) $true 'an editor holds the lock'
+        # Close: the copy's own editor, by its path.
+        & $hooks.Close (New-Context $repo $repo)
+        Assert-Equal (Get-Content $env:FAKE_CLOSED) "$repo\Client" 'Close closes the copy''s editor'
     } finally {
         $held.Dispose()
     }
+    Remove-Item $env:FAKE_CLOSED
+    & $hooks.Close (New-Context $repo $repo)
+    & $hooks.Close (New-Context $repo $plain)
+    Assert-Equal (Test-Path $env:FAKE_CLOSED) $false 'no Close with no editor open, or with no Unity project'
 
     # A project at the repo root.
     New-Item -ItemType Directory -Force "$plain\ProjectSettings" | Out-Null

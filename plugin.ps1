@@ -85,7 +85,7 @@ function Test-ProjectOpen([string] $project) {
 }
 
 # Opens the project's editor when none is open.
-# shortcut: an editor of another repo's job stays open beside the copy's own; close it by hand if memory gets tight.
+# shortcut: an editor of another repo's job stays open beside the copy's own until the worker is disabled.
 function Start-UnityIfClosed([string] $project, $ctx) {
     if (Test-ProjectOpen $project) {
         return
@@ -102,9 +102,10 @@ function Start-UnityIfClosed([string] $project, $ctx) {
     Start-Process $editor -ArgumentList "-projectPath `"$project`""
 }
 
-# Waits until the Unity CLI says the project's editor is ready for commands: a first open imports everything, so up to
-# 90 minutes. Reports every 30 seconds. A dialog never closes with nobody there, so it throws with the dialog's title:
-# the worker shows that on its card and looks again later.
+# Opens the project's editor and waits until the Unity CLI says it is ready for commands: a first open imports
+# everything, so up to 90 minutes. Reports every 30 seconds. An editor that closes during the wait opens again. A dialog
+# never closes with nobody there, so it throws with the dialog's title: the worker shows that on its card and looks
+# again later.
 function Wait-UnityReady([string] $project, $ctx) {
     for ($i = 0; $i -lt 180; $i++) {
         $status = Get-EditorStatus $project
@@ -115,6 +116,7 @@ function Wait-UnityReady([string] $project, $ctx) {
         if ($dialogs) {
             throw "its Unity editor waits in a dialog that a person must answer: $($dialogs -join ', ')"
         }
+        Start-UnityIfClosed $project $ctx
         & $ctx.Report 'Opening its Unity editor'
         Start-Sleep 30
     }
@@ -247,7 +249,6 @@ function Add-Pipeline([string] $checkout, [string] $project, $ctx) {
         param($ctx)
         $project = Get-UnityProject $ctx.Copy
         if ($project -and (Test-Pipeline $project)) {
-            Start-UnityIfClosed $project $ctx
             Wait-UnityReady $project $ctx
         }
     }
@@ -279,6 +280,19 @@ function Add-Pipeline([string] $checkout, [string] $project, $ctx) {
         $project = Get-UnityProject $ctx.Copy
         if ($project -and (Test-Path "$project/Temp")) {
             Set-Content "$project/Temp/ScriptoriumRunEnded" '' -Encoding utf8
+        }
+    }
+    # Closes the checkout's editor, the one Start opens. It exits without saving: a run pushes its work at each
+    # checkpoint, and the worker calls this only after its run has ended.
+    Close = {
+        param($ctx)
+        $project = Get-UnityProject $ctx.Copy
+        if ($project -and (Test-Pipeline $project) -and (Test-ProjectOpen $project)) {
+            & $ctx.Log "closing the Unity editor of $project"
+            & unity close $project.Replace('/', '\') --force --non-interactive | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                throw "unity close did not close the editor of $project"
+            }
         }
     }
 }
