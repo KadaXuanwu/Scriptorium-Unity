@@ -101,8 +101,8 @@ A test tweak can leak into `ProjectSettings` (`Time.timeScale`): put it back, an
   which dialog a person must answer.
 - **After play mode starts or code compiles**, the editor does not answer for a few seconds.
   `unity status --until-ready` waits for it.
-- **A string in inline code needs a shell that keeps its quotes.** Bash keeps `"..."` inside `'...'`. Windows
-  PowerShell 5.1 drops them: use `-- --file` there.
+- **Run `unity` from Bash, never through `powershell -Command`.** Bash keeps a `"..."` string of inline code inside
+  `'...'`. Windows PowerShell 5.1 drops the quotes.
 - **Never run `console clear`** on an editor that a person uses too: it empties their Console window.
 
 ## Crashes
