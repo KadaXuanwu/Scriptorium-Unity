@@ -16,15 +16,39 @@ the link, beside the name.
 The queue's rules are in the Scriptorium folder: `docs/QUEUE.md` (the queue), `docs/APP.md` (the page) and
 `PLAYBOOK.md` (what a run does).
 
+**This project's rules.** `.claude/skills/ticket/PROJECT.md` holds the project's own rules for tickets. Read it in your
+first message, together with your first other calls. Where it differs from this file, it wins. A new rule of the
+project goes there, never in this file: setup replaces this file with Scriptorium's current one.
+
+**Turns.** Each request reads your whole context again, and a front desk's context is large: that is most of what a
+ticket costs to file. Before each message, list the reads, searches and commands that do not need each other's result,
+and send them all in that one message. One tool call for each message is the wrong default. Read each thing once: the
+queue, and the part of a file that you need, in one range. Keep a command's output short (`-q`, `| head`, `| tail`).
+
 ## Filing a ticket
 
 1. **Find the gaps before you write.** A worker who must guess ships part of the ticket and leaves the rest as a
-   follow-up. Read the code and data the ticket touches, reproduce a bug, run the tests. Then list what a worker would
-   have to decide alone:
+   follow-up.
+
+   Start with the queue: one command, once for all the tickets of the session.
+   `gh label list --search area: --limit 200 --json name,description --jq '.[] | [.name, .description] | @tsv'; gh issue list --state open --limit 200 --json number,title,labels --jq '.[] | [.number, .title] + (.labels | map(.name)) | @tsv'`
+   It prints each area with what it covers, then each open ticket with its labels. If an open ticket already asks for
+   the same, say so and file no second one.
+
+   Read the code and data the ticket touches, as far as Done, Scope and Start here (step 2) need it. The worker reads
+   the rest itself, and your context is the dearest place to read:
+   - A `size:S` ticket needs one look at the place.
+   - Reproduce a bug only when the report leaves open what happens. Run one test, never a whole check.
+   - When a ticket's reading needs more than one message of calls, give it to a helper: the Agent tool, type Explore,
+     on a smaller model than yours. For several such tickets, start one helper for each, all in one message. Tell
+     each what its ticket asks. Each returns the files (with lines), the mechanism, the edge cases, the
+     neighbours and what it could not find. This skill is the owner's request for these helpers.
+
+   Then list what a worker would have to decide alone:
    - **Done:** a check the worker can run itself, with a number where one fits. "The list loads in under 0.5 s with
      10,000 rows", not "the list is fast".
-   - **Scope by outcome, not by place:** say what must be true for the user. Name a file or a layer only when the owner
-     did.
+   - **Scope by outcome, not by place:** say what must be true for the user. In Scope and Done, name a file or a layer
+     only when the owner did. What your reading found goes in Start here (step 2).
    - **The feature's own edge cases:** every input and case it meets. Read the data to list them.
    - **Neighbours:** what the change reaches that the ask did not name.
    - **Measure tickets:** report only, or fix what the measurement finds, and up to what size.
@@ -37,15 +61,24 @@ The queue's rules are in the Scriptorium folder: `docs/QUEUE.md` (the queue), `d
 2. Write it in the style of the project's `CLAUDE.md`, with its terms. A worker reads each word in one meaning only, so a
    synonym for a term can make a wrong build.
    `gh issue create --title <title> --body-file <file> --label <priority> --label <area>...`
+   For several tickets, write all the body files in one message, then create all the tickets in one command.
    - **Title:** imperative, in the product's words ("Keep the filter after a reload").
-   - **Body**, in this order:
-     - What the user should see or be able to do; for a bug, what happens and what should.
-     - **Where:** the screen or the part, and how to see it.
+   - **Body**, in this order, each line with its name in bold. Leave out a line that has nothing to say. A follow-up
+     that a run writes has the same lines (`PLAYBOOK-followup.md`), so a worker reads one form.
+     - **Summary:** one sentence: what the product does once it is done.
+     - **Now:** for a bug or a measurement: what happens today, with the numbers you measured.
+     - **Should:** what the user should see or be able to do.
+     - **Where:** the screen or the part, and how to see it (a command, a test, the clicks).
+     - **Start here:** what your reading found: the files (linked), the mechanism, what you ruled out, and the doc
+       with its section that the worker reads first. It is where the worker starts, not a limit of the work.
      - **Scope:** what it includes (the edge cases from step 1) and what it leaves out, so the worker does not file the
        left-out part as a follow-up.
      - **Done when:** the checks from step 1.
      - **Decisions:** any rule the owner set.
      - `Blocked by #N` on its own line if it needs another ticket merged first.
+   - **No repeats:** leave out what every run already has: the playbook's rules (a number is a placeholder, what to
+     ask, which checks to run) and the project's `CLAUDE.md`. Do not shorten Scope or Done to save length: a long body
+     costs a run little, and a gap costs it a follow-up.
    - Before you file, read it as the worker: if one guess would change the product, close that gap first.
    - **Priority:** the owner's word. `P0` urgent, `P1` normal (the default), `P2` when nothing else waits. No priority
      label parks it; do that when the owner says "later" or "idea". Never keep a ticket for later with `needs-owner`:
@@ -55,7 +88,7 @@ The queue's rules are in the Scriptorium folder: `docs/QUEUE.md` (the queue), `d
      two workers off the same files. Choose it from the files the ticket changes, not from its topic. The list is not
      fixed:
      1. Find the files the ticket changes, from the code.
-     2. Read the areas in use: `gh label list --search area: --limit 200`, and those of the open tickets.
+     2. Read the areas in use and those of the open tickets, from the command of step 1.
      3. If an area covers those files, use it. Two tickets that change the same files must share an area. Use no
         synonym: a second name for the same files is no lock.
      4. If no area fits, make one, with the files in its description:
@@ -82,8 +115,24 @@ The queue's rules are in the Scriptorium folder: `docs/QUEUE.md` (the queue), `d
      plainest thing that makes the feature work, with no variants, no polish and no hold. Write that into the ticket.
      The polished work is a later ticket. A new look still comes as three plain candidates with screenshots, the first
      built in, and the owner picks in an open question (`PLAYBOOK-pictures.md`, The owner's pick).
-3. Report the number and the link, in one line. Several asks in one message are several tickets: split them so each
-   can merge alone, and chain them with `Blocked by` only where the order matters.
+3. Report the number and the link, in one line.
+
+### More than one ticket
+
+Several asks in one message are several tickets: split them so each can merge alone, and chain them with `Blocked by`
+only where the order matters.
+
+- **Small asks together:** asks of `size:S` that change the same files and leave no question open are one ticket, with
+  one Done line for each. Apart, they would run one after another, and each run pays its start, its checks and its PR.
+- **The list first:** when one ask makes more than six tickets, show the owner the list before you write a body: each
+  title with its size and what it waits for, as one question. The owner can cut it or change the order.
+- **Each ticket gets step 1 for itself:** its own Done check, from its own reading. The last body of a batch is as
+  full as the first.
+- **A later step is a stub.** Write in full only a ticket that can start now, or after one merge. A ticket that waits
+  for a ticket that itself waits is a stub: the code it builds on does not exist yet, so nobody can close its gaps.
+  A stub has its title, its areas, its `Blocked by` line, no priority label (so it is parked), and a body of one
+  line: `**Stub:** <what it does>. The front desk writes it in full when #N has merged.` Tell the owner which tickets
+  are stubs. When its blockers have merged, do step 1 on it, write its body in full and give it its priority.
 
 ## The queue's state
 
@@ -100,6 +149,8 @@ what it does not hold:
 - **Questions that block nothing:** open issues labelled `open-question` (its default is built already) or `follow-up`
   (a draft that waits for the owner's answer).
 - **Queued:** by priority, then size, then age; say which wait on a blocker or a busy area.
+- **Stubs:** a parked ticket whose body starts `**Stub:**` (More than one ticket). When its blockers are closed, say
+  so, and offer to write it in full.
 - **Paused for the usage limit:** a `**Worker N:** paused…` comment says when it resumes, by itself. Each account's
   usage is in `usage.json` in the PC's Scriptorium folder (`%LOCALAPPDATA%\Scriptorium` on Windows, `~/Library/Application Support/Scriptorium` on macOS, `~/.local/share/Scriptorium` on Linux) (for every project), and which worker got which
   ticket and why in the workers' `worker.log` (`assigned #N…`).
