@@ -134,7 +134,7 @@ only where the order matters.
   line: `**Stub:** <what it does>. The front desk writes it in full when #N has merged.` Tell the owner which tickets
   are stubs. When its blockers have merged, do step 1 on it, write its body in full and give it its priority.
   **Not while the owner is away:** a stub waits for the owner. When the owner says that they will be away, or the
-  page's Away switch is on (`away` in the snapshot, The queue's state), write each later step in full with its
+  page's No blocking switch is on (`away` in the snapshot, The queue's state), write each later step in full with its
   priority, and say which tickets you wrote for code that does not exist yet.
 
 ## The queue's state
@@ -154,7 +154,7 @@ what it does not hold:
 - **Queued:** by priority, then size, then age; say which wait on a blocker or a busy area.
 - **Stubs:** a parked ticket whose body starts `**Stub:**` (More than one ticket). When its blockers are closed, say
   so, and offer to write it in full.
-- **Away:** `away` in the snapshot is the owner's switch on the page's Questions tab. While it is on, no question
+- **No blocking:** `away` in the snapshot is the owner's switch on the page's Workers tab. While it is on, no question
   holds work: a worker builds its default, and the merger hands back a held PR, a ticket's question and, once, a stuck
   run. When the owner says that they will be away, name what would still wait: the stubs, and each parked ticket that
   a queued one is `Blocked by`. Offer to write the stubs in full first.
