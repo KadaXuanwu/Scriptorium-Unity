@@ -49,6 +49,8 @@ Climb only as far as the change needs. A change to docs alone needs none.
   before a step, and read with `unity command console get -- --level error --since <cursor>` after it: the console
   keeps the entries of earlier work.
 - A test run right after a compile error runs the last assembly that built.
+- Read the whole output of `unity command test run --detach`: its last line is blank, so `| tail -1` hides the job id.
+  Each start queues one more whole run. If a start printed no job id, do not start again.
 - Play a check when the view or the wiring changed. Name the checks you ran in the PR's **Verified** line.
 
 **Play it.** An unfocused editor does not tick play mode by itself, and a screenshot of a frozen game looks like a
