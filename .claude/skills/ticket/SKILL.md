@@ -16,7 +16,7 @@ the link, beside the name.
 The queue's rules are in the Scriptorium folder: `docs/QUEUE.md` (the queue), `docs/APP.md` (the page) and
 `PLAYBOOK.md` (what a run does).
 
-**This project's rules.** `.claude/skills/ticket/PROJECT.md` holds the project's own rules for tickets. Read it in your
+**This project's rules.** `PROJECT.md` beside this file holds the project's own rules for tickets. Read it in your
 first message, together with your first other calls. Where it differs from this file, it wins. A new rule of the
 project goes there, never in this file: setup replaces this file with Scriptorium's current one.
 
@@ -58,7 +58,7 @@ queue, and the part of a file that you need, in one range. Keep a command's outp
    Close each gap yourself when the code or the docs answer it, or when a default is clear: write the default into the
    ticket. Ask the owner only what changes the product or the scope, in one question with at most four parts, your
    recommended default first. Numbers are placeholders, never a question. A short ask with no gaps gets no questions.
-2. Write it in the style of the project's `CLAUDE.md`, with its terms. A worker reads each word in one meaning only, so a
+2. Write it in the style of the project's rules file, with its terms. A worker reads each word in one meaning only, so a
    synonym for a term can make a wrong build.
    `gh issue create --title <title> --body-file <file> --label <priority> --label <area>...`
    For several tickets, write all the body files in one message, then create all the tickets in one command.
@@ -77,7 +77,7 @@ queue, and the part of a file that you need, in one range. Keep a command's outp
      - **Decisions:** any rule the owner set.
      - `Blocked by #N` on its own line if it needs another ticket merged first.
    - **No repeats:** leave out what every run already has: the playbook's rules (a number is a placeholder, what to
-     ask, which checks to run) and the project's `CLAUDE.md`. Do not shorten Scope or Done to save length: a long body
+     ask, which checks to run) and the project's rules file. Do not shorten Scope or Done to save length: a long body
      costs a run little, and a gap costs it a follow-up.
    - Before you file, read it as the worker: if one guess would change the product, close that gap first.
    - **Priority:** the owner's word. `P0` urgent, `P1` normal (the default), `P2` when nothing else waits. No priority
@@ -109,8 +109,8 @@ queue, and the part of a file that you need, in one range. Keep a command's outp
      (judgement within known patterns: a feature or a bug in one part), `complexity:high` (core rules, work across
      parts, a bug nobody can explain yet, speed), each complexity of the project's own (`scriptorium.json`), and
      `complexity:design` (the ticket does not give the shape of the solution, so the worker must find it, and the
-     choice stays). Only `design` runs on Fable; a few hard judgements are no reason for it, as medium and high runs
-     have an advisor. Judge complexity apart from size. The owner's word overrides both.
+     choice stays). Only `design` runs on the provider's strongest model, where it has one; a few hard judgements are
+     no reason for it, as medium and high runs may have an advisor. Judge complexity apart from size. The owner's word overrides both.
    - **Placeholder first:** a look or an asset for a feature the owner has not confirmed in use is a placeholder: the
      plainest thing that makes the feature work, with no variants, no polish and no hold. Write that into the ticket.
      The polished work is a later ticket. A new look still comes as three plain candidates with screenshots, the first
