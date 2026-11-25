@@ -7,8 +7,8 @@ compile, test and play its work.
 ## What it needs
 
 - Windows 10 or 11, with Scriptorium set up.
-- Scriptorium of 2026-11-18 or later (`git pull` in its folder first): it gives a run the environment variables and
-  the tool rules of this plugin.
+- Scriptorium of 2026-11-25 or later (`git pull` in its folder first): it gives a run the environment variables and
+  the commands of this plugin. An older one does not read the commands, so its runs ask before each `unity` command.
 - The project's Unity version, installed with Unity Hub.
 - The Unity CLI (`unity`) on the PATH.
 - Unity 6.0 or later for a live editor: the CLI reaches a running editor through the `com.unity.pipeline` package, and
@@ -43,7 +43,7 @@ Each key of the entry is a setting. A PC can set its own in `.queue/settings.jso
 | `Setup` | Checks that `unity` is on the PATH and that the project's Unity version is in `editors`. Copies `Assets/Scriptorium/Editor/RunEnd.cs` and its `.meta` files into the project. Adds the Smart Merge lines for Unity's YAML files to `.gitattributes` when it has none. Adds `com.unity.pipeline` to the project's `Packages/manifest.json` with `unity pipeline install`, on Unity 6.0 or later. Sets Smart Merge as a merge driver in the main checkout. Returns the files it added or changed |
 | `PrepareCopy` | Copies the Asset Store packages that `AssetStore.json` at the project root lists from the main checkout, when that file is there. Sets Smart Merge in the copy |
 | `Start` | Copies the Asset Store packages the copy lacks, as `PrepareCopy` does, so a package added after the copy was made reaches it before its editor opens. Opens the copy's editor when it is closed, and waits until `unity status` says it is ready for commands: up to 90 minutes for a first import. An editor that closes during the wait opens again. Before it opens one, it deletes the copy's scene backup (`Temp/__Backupscenes`), which an editor that was ended by force leaves and which makes the next editor wait in a dialog. An editor that still starts counts as open, so the hook never opens a second one. An editor that waits in a dialog stops the hook with the dialog's title, and the worker's card shows it. Nothing for a project without `com.unity.pipeline` |
-| `GetRun` | Gives the run the tool rules for the `unity` commands that drive its editor, `UNITY_PROJECT_PATH` in its environment set to the copy's project, and a sentence that names its editor. No rule lets a run install or remove an editor, sign in, or change the PC |
+| `GetRun` | Gives the run the `unity` commands that drive its editor, which it may start without asking (`Commands`: each provider makes its own tool rule of one), `UNITY_PROJECT_PATH` in its environment set to the copy's project, and a sentence that names its editor. No command lets a run install or remove an editor, sign in, or change the PC |
 | `EndRun` | Writes `Temp/ScriptoriumRunEnded`. The editor script reads it and leaves play mode |
 | `Close` | Closes the checkout's editor with `unity close --force`, without saving. Nothing when no editor is open or the project has no `com.unity.pipeline` |
 

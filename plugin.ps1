@@ -18,8 +18,9 @@ function Get-Editors($settings) {
 
 # What a run may call without a question: the commands that drive or start its own editor, never the ones that install
 # or remove an editor, sign in or change the PC.
-$RunTools = @('Bash(unity command:*)', 'Bash(unity recompile:*)', 'Bash(unity status:*)', 'Bash(unity job:*)',
-    'Bash(unity test:*)', 'Bash(unity run:*)', 'Bash(unity open:*)', 'Bash(unity close:*)', 'Bash(unity skill show:*)')
+# Each by how it starts (the base's docs/PLUGINS.md, Commands): the provider makes its own tool rule of it.
+$RunCommands = @('unity command', 'unity recompile', 'unity status', 'unity job', 'unity test', 'unity run', 'unity open',
+    'unity close', 'unity skill show')
 
 # A checkout's Unity project: the checkout itself or a folder one level down; $null for a repo without one.
 function Get-UnityProject([string] $dir) {
@@ -274,7 +275,7 @@ function Add-Pipeline([string] $checkout, [string] $project, $ctx) {
         }
         $path = $project.Replace('/', '\')
         $run = @{
-            AllowedTools = $RunTools
+            Commands = $RunCommands
             Env = @{ UNITY_PROJECT_PATH = $path; UNITY_NO_BANNER = '1'; UNITY_NO_PAGER = '1'; UNITY_NON_INTERACTIVE = '1' }
         }
         $run.Prompt = if (Test-Pipeline $project) {

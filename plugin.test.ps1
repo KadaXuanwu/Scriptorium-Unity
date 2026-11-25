@@ -83,8 +83,9 @@ if "%1"=="close" echo %2> "%FAKE_CLOSED%"
     $run = & $hooks.GetRun (New-Context $repo $repo)
     Assert-Equal $run.Env.UNITY_PROJECT_PATH "$repo\Client" 'the run''s own project'
     Assert-Equal "$($run.Env.UNITY_NON_INTERACTIVE)$($run.Env.UNITY_NO_BANNER)$($run.Env.UNITY_NO_PAGER)" '111' 'no prompt, banner or pager'
-    Assert-Equal ($run.AllowedTools -contains 'Bash(unity command:*)') $true 'the tool rule for editor commands'
-    Assert-Equal @($run.AllowedTools | Where-Object { $_ -notlike 'Bash(unity ?*:`*)' }).Count 0 'each rule names one unity command'
+    Assert-Equal ($run.Commands -contains 'unity command') $true 'the editor commands'
+    Assert-Equal @($run.Commands | Where-Object { $_ -notmatch '^unity [a-z]+( [a-z]+)?$' }).Count 0 'each names one unity command, never unity alone'
+    Assert-Equal $run.ContainsKey('AllowedTools') $false 'no rule in one provider''s syntax'
     Assert-Equal ($run.Prompt -like "Your Unity editor is the one that has $repo\Client open.*") $true 'the prompt names the editor'
     Assert-Equal $run.ContainsKey('McpServers') $false 'no MCP server'
     $plain = Join-Path $root 'Tools'
