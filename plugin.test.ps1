@@ -64,6 +64,21 @@ if "%1"=="close" echo %2> "%FAKE_CLOSED%"
     & $hooks.PrepareCopy (New-Context $repo $copy $settings)
     Assert-Equal (& git -C $copy config merge.unityyamlmerge.name) 'Unity SmartMerge' 'Smart Merge in the copy'
 
+    # The packages the main checkout has: each copy gets the ones its own AssetStore.json lists, at PrepareCopy and at
+    # each Start; one that only the main checkout's list names stays out (an older branch, whose manifest lacks what the
+    # package needs).
+    $list = '{ "Packages": [{ "Root": "Assets/Old", "Probe": "Assets/Old/a.txt" }, { "Root": "Assets/New", "Probe": "Assets/New/b.txt" }] }'
+    New-Item -ItemType Directory -Force "$repo\Client\Assets\Old", "$repo\Client\Assets\New", "$copy\Client\Assets" | Out-Null
+    Set-Content "$repo\Client\Assets\Old\a.txt", "$repo\Client\Assets\New\b.txt", "$repo\Client\Assets\New.meta" '' -Encoding ascii
+    Set-Content "$repo\Client\AssetStore.json" $list -Encoding ascii
+    Set-Content "$copy\Client\AssetStore.json" '{ "Packages": [{ "Root": "Assets/Old", "Probe": "Assets/Old/a.txt" }] }' -Encoding ascii
+    & $hooks.PrepareCopy (New-Context $repo $copy $settings)
+    Assert-Equal "$(Test-Path "$copy\Client\Assets\Old\a.txt")$(Test-Path "$copy\Client\Assets\New")" 'TrueFalse' 'PrepareCopy copies what the copy lists'
+    Set-Content "$copy\Client\AssetStore.json" $list -Encoding ascii
+    Set-Content $env:FAKE_STATUS '{ "data": { "instances": [{ "state": "ready" }] } }' -Encoding ascii
+    & $hooks.Start (New-Context $repo $copy $settings)
+    Assert-Equal "$(Test-Path "$copy\Client\Assets\New\b.txt")$(Test-Path "$copy\Client\Assets\New.meta")" 'TrueTrue' 'Start copies a package added later'
+
     # GetRun: the Unity CLI's commands, aimed at the checkout's own project; nothing for a repo without Unity.
     $run = & $hooks.GetRun (New-Context $repo $repo)
     Assert-Equal $run.Env.UNITY_PROJECT_PATH "$repo\Client" 'the run''s own project'

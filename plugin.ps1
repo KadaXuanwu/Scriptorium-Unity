@@ -131,12 +131,13 @@ function Set-YamlMerge([string] $checkout, [string] $version, $settings) {
     & git -C $checkout config merge.unityyamlmerge.recursive binary
 }
 
-# The Asset Store packages a new copy lacks, when the project lists them in AssetStore.json at its root
-# (`{ "Packages": [{ "Root": "Assets/Pack", "Probe": "Assets/Pack/a.cs" }] }`): they are not in git, and a fresh copy
-# cannot import them alone. Copied from the main checkout, root folder and its .meta; then the files git holds go back
-# to what git has. Nothing without the file.
+# The Asset Store packages a copy lacks, when its project lists them in AssetStore.json at its root
+# (`{ "Packages": [{ "Root": "Assets/Pack", "Probe": "Assets/Pack/a.cs" }] }`): they are not in git, and a copy cannot
+# import them alone. Copied from the main checkout, root folder and its .meta; then the files git holds go back to what
+# git has. The copy's own list, not the main checkout's: a package can need Unity packages that only a manifest of the
+# same commit names, and on an older branch it would not compile. Nothing without the file.
 function Copy-AssetStorePackages([string] $mainProject, [string] $copyProject, [string] $copy, [string] $relative) {
-    $list = Join-Path $mainProject 'AssetStore.json'
+    $list = Join-Path $copyProject 'AssetStore.json'
     if (-not (Test-Path $list)) {
         return
     }
@@ -157,6 +158,13 @@ function Copy-AssetStorePackages([string] $mainProject, [string] $copyProject, [
             & git -C $copy checkout -- "$prefix$($package.Root)"
         }
     }
+}
+
+# Copy-AssetStorePackages from the main checkout's project into the same folder of $ctx.Copy.
+function Update-AssetStorePackages($ctx, [string] $mainProject) {
+    $relative = Get-RelativeProject $ctx.Project $mainProject
+    $copyProject = if ($relative) { Join-Path $ctx.Copy $relative } else { $ctx.Copy }
+    Copy-AssetStorePackages $mainProject $copyProject $ctx.Copy $relative
 }
 
 # The editor script that leaves play mode when a run ends (unity/Assets/Scriptorium), copied into the project when it
@@ -238,15 +246,19 @@ function Add-Pipeline([string] $checkout, [string] $project, $ctx) {
         if (-not $project) {
             return
         }
-        $relative = Get-RelativeProject $ctx.Project $project
-        $copyProject = if ($relative) { Join-Path $ctx.Copy $relative } else { $ctx.Copy }
-        Copy-AssetStorePackages $project $copyProject $ctx.Copy $relative
+        Update-AssetStorePackages $ctx $project
         Set-YamlMerge $ctx.Copy (Get-UnityVersion $project) $ctx.Settings
     }
-    # Opens the checkout's editor when it is closed and waits until it is ready for commands. Not for a project without
-    # the Pipeline package: no command reaches its editor, and an open editor stops the batch mode runs.
+    # Copies the Asset Store packages the copy lacks, as PrepareCopy does: a package added after the copy was made comes
+    # with a later branch, and the editor's own import of it would wait in a dialog. Then opens the checkout's editor
+    # when it is closed and waits until it is ready for commands. Not for a project without the Pipeline package: no
+    # command reaches its editor, and an open editor stops the batch mode runs.
     Start = {
         param($ctx)
+        $main = Get-UnityProject $ctx.Project
+        if ($main) {
+            Update-AssetStorePackages $ctx $main
+        }
         $project = Get-UnityProject $ctx.Copy
         if ($project -and (Test-Pipeline $project)) {
             Wait-UnityReady $project $ctx
