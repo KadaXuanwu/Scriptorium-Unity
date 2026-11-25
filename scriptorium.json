@@ -2,6 +2,8 @@
     "name":  "Scriptorium-Unity",
     "port":  8772,
     "plugins":  {
+                    "claude":  {
 
+                               }
                 }
 }
