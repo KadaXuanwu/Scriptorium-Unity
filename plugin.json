@@ -1,7 +1,7 @@
 {
     "name": "unity",
     "title": "Scriptorium for Unity",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "api": 1,
     "description": "One Unity editor for each worker copy, driven with the Unity CLI.",
     "requires": ["unity"]

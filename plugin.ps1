@@ -103,17 +103,59 @@ function Start-UnityIfClosed([string] $project, $ctx) {
     Start-Process $editor -ArgumentList "-projectPath `"$project`""
 }
 
+# Presses the button $button of the dialog $title of the process $processId: the dialog's own button, by a window
+# message, so it needs no focus and no mouse. $false with no such dialog or button, and where there is no Windows.
+function Send-DialogButton([int] $processId, [string] $title, [string] $button) {
+    if ($env:OS -ne 'Windows_NT') {
+        return $false
+    }
+    if (-not ('ScriptoriumUnity.Window' -as [type])) {
+        Add-Type -Namespace ScriptoriumUnity -Name Window -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowEx(System.IntPtr parent, System.IntPtr after, string className, string title);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
+[DllImport("user32.dll")] public static extern bool PostMessage(System.IntPtr window, uint message, System.IntPtr w, System.IntPtr l);
+'@
+    }
+    $none = [IntPtr]::Zero
+    $window = $none
+    # Every dialog with this title: each copy's editor can show one.
+    while (($window = [ScriptoriumUnity.Window]::FindWindowEx($none, $window, '#32770', $title)) -ne $none) {
+        $owner = [uint32]0
+        [void][ScriptoriumUnity.Window]::GetWindowThreadProcessId($window, [ref]$owner)
+        if ($owner -ne $processId) {
+            continue
+        }
+        $control = [ScriptoriumUnity.Window]::FindWindowEx($window, $none, 'Button', $button)
+        # 0x00F5: BM_CLICK.
+        return $control -ne $none -and [ScriptoriumUnity.Window]::PostMessage($control, 0x00F5, $none, $none)
+    }
+    return $false
+}
+
+# The dialog of an editor that starts on code that does not compile, and its button that opens the project as it is.
+$SafeModeDialog = 'Enter Safe Mode?'
+$SafeModeIgnore = 'Ignore'
+
 # Opens the project's editor and waits until the Unity CLI says it is ready for commands: a first open imports
 # everything, so up to 90 minutes. Reports every 30 seconds. An editor that closes during the wait opens again. A dialog
 # never closes with nobody there, so it throws with the dialog's title: the worker shows that on its card and looks
-# again later.
+# again later. But for the one that asks about Safe Mode, since the copy's code does not compile (seen: a run's
+# unfinished work, opened by a new editor): the wait presses Ignore, once, and the editor opens the project as it is.
+# The run then reads the compile errors as it does after an edit of its own.
 function Wait-UnityReady([string] $project, $ctx) {
+    $ignored = $false
     for ($i = 0; $i -lt 180; $i++) {
         $status = Get-EditorStatus $project
         if ($status -and $status.state -eq 'ready') {
             return
         }
         $dialogs = @($status.blockedBy.dialogs | ForEach-Object { $_.title } | Where-Object { $_ })
+        if (-not $ignored -and $dialogs -contains $SafeModeDialog -and (Send-DialogButton ([int]$status.pid) $SafeModeDialog $SafeModeIgnore)) {
+            $ignored = $true
+            & $ctx.Log "the code of $project does not compile: pressed $SafeModeIgnore in its editor's '$SafeModeDialog' dialog"
+            Start-Sleep 5
+            continue
+        }
         if ($dialogs) {
             throw "its Unity editor waits in a dialog that a person must answer: $($dialogs -join ', ')"
         }

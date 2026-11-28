@@ -101,6 +101,8 @@ A test tweak can leak into `ProjectSettings` (`Time.timeScale`): put it back, an
   change to the open scene. With CLI 1.0.0 and package 1.0.0 no command answers a dialog. Look for one in your
   editor's list (`unity command --query dialog`); if it has none, do the work that needs no editor, and say in the PR
   which dialog a person must answer.
+- **Your editor may have opened on code that does not compile** (unfinished work in your copy). `unity recompile`
+  then says the scripts still have compile errors: read them with `unity command console get`, fix them, recompile.
 - **After play mode starts or code compiles**, the editor does not answer for a few seconds.
   `unity status --until-ready` waits for it.
 - **Run `unity` from Bash, never through `powershell -Command`.** Bash keeps a `"..."` string of inline code inside
