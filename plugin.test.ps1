@@ -101,6 +101,32 @@ if "%1"=="close" echo %2> "%FAKE_CLOSED%"
     $threw = ''
     try { & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo) } catch { $threw = "$_" }
     Assert-Equal $threw 'its Unity editor waits in a dialog that a person must answer: Scene Backup Detected' 'an editor in a dialog'
+    # The Safe Mode dialog (the copy's code does not compile): the wait presses Ignore once and goes on; with no such
+    # dialog to press (here: no editor at all), and with one that stays, it throws as for any other dialog.
+    $safe = '{ "data": { "instances": [{ "state": "starting", "pid": 1, "blockedBy": { "reason": "dialog", "dialogs": [{ "title": "Enter Safe Mode?" }] } }] } }'
+    Set-Content $env:FAKE_STATUS $safe -Encoding ascii
+    $threw = ''
+    try { & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo) } catch { $threw = "$_" }
+    Assert-Equal $threw 'its Unity editor waits in a dialog that a person must answer: Enter Safe Mode?' 'a Safe Mode dialog that nothing can press'
+    $real = & $module { ${function:Send-DialogButton} }
+    try {
+        & $module { function script:Send-DialogButton([int] $processId, [string] $title, [string] $button) {
+                $script:pressed = "$($script:pressed)$processId $title $button;"
+                if ($env:FAKE_PRESS_OPENS) { Set-Content $env:FAKE_STATUS '{ "data": { "instances": [{ "state": "ready" }] } }' -Encoding ascii }
+                return $true
+            } }
+        $env:FAKE_PRESS_OPENS = '1'
+        & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo)
+        Assert-Equal (& $module { $script:pressed }) '1 Enter Safe Mode? Ignore;' 'the wait presses Ignore in the editor''s own dialog, and the editor opens'
+        $env:FAKE_PRESS_OPENS = ''
+        Set-Content $env:FAKE_STATUS $safe -Encoding ascii
+        $threw = ''
+        try { & $module { param($project, $ctx) Wait-UnityReady $project $ctx } $client (New-Context $repo $repo) } catch { $threw = "$_" }
+        Assert-Equal "$threw $(& $module { $script:pressed })" 'its Unity editor waits in a dialog that a person must answer: Enter Safe Mode? 1 Enter Safe Mode? Ignore;1 Enter Safe Mode? Ignore;' 'a Safe Mode dialog that stays is pressed once'
+    } finally {
+        & $module { param($real) Set-Item function:script:Send-DialogButton $real } $real
+        $env:FAKE_PRESS_OPENS = $null
+    }
     # No editor during the wait (it closed, or never opened): the wait opens it. Here the default editors folder has no
     # Unity 6000.7.1f1, so the open throws.
     Set-Content $env:FAKE_STATUS '{ "data": { "instances": [] } }' -Encoding ascii
